@@ -6,6 +6,7 @@ use biome_js_syntax::{
     AnyJsExpression, JsCallExpression, JsObjectExpression, JsStaticMemberExpression,
 };
 use biome_rowan::AstNode;
+use biome_rule_options::no_playwright_networkidle::NoPlaywrightNetworkidleOptions;
 
 declare_lint_rule! {
     /// Disallow usage of the `networkidle` option.
@@ -50,7 +51,7 @@ impl Rule for NoPlaywrightNetworkidle {
     type Query = Ast<JsCallExpression>;
     type State = ();
     type Signals = Option<Self::State>;
-    type Options = ();
+    type Options = NoPlaywrightNetworkidleOptions;
 
     fn run(ctx: &RuleContext<Self>) -> Self::Signals {
         let call_expr = ctx.query();

@@ -7,7 +7,10 @@ use biome_diagnostics::Applicability;
 use biome_js_syntax::{AnyJsExpression, JsAwaitExpression, JsCallExpression};
 use biome_rowan::{AstNode, BatchMutationExt, TokenText};
 
+use biome_rule_options::no_playwright_useless_await::NoPlaywrightUselessAwaitOptions;
+
 use crate::JsRuleAction;
+use crate::frameworks::playwright::is_page_or_frame_name;
 
 declare_lint_rule! {
     /// Disallow unnecessary `await` for Playwright methods that don't return promises.
@@ -61,6 +64,7 @@ declare_lint_rule! {
 }
 
 // Locator methods that return Locator (synchronous)
+// IMPORTANT: Keep this array sorted for binary search
 const LOCATOR_METHODS: &[&str] = &[
     "and",
     "first",
@@ -78,6 +82,7 @@ const LOCATOR_METHODS: &[&str] = &[
 ];
 
 // Page/Frame methods that are synchronous
+// IMPORTANT: Keep this array sorted for binary search
 const SYNC_PAGE_METHODS: &[&str] = &[
     "childFrames",
     "frame",
@@ -99,6 +104,7 @@ const SYNC_PAGE_METHODS: &[&str] = &[
 ];
 
 // Synchronous expect matchers (not Playwright-specific web-first assertions)
+// IMPORTANT: Keep this array sorted for binary search
 const SYNC_EXPECT_MATCHERS: &[&str] = &[
     "toBe",
     "toBeCloseTo",
@@ -129,7 +135,7 @@ impl Rule for NoPlaywrightUselessAwait {
     type Query = Ast<JsAwaitExpression>;
     type State = ();
     type Signals = Option<Self::State>;
-    type Options = ();
+    type Options = NoPlaywrightUselessAwaitOptions;
 
     fn run(ctx: &RuleContext<Self>) -> Self::Signals {
         let await_expr = ctx.query();
@@ -146,12 +152,12 @@ impl Rule for NoPlaywrightUselessAwait {
             let method_name = member_token.text_trimmed();
 
             // Check if it's a locator method
-            if LOCATOR_METHODS.contains(&method_name) {
+            if LOCATOR_METHODS.binary_search(&method_name).is_ok() {
                 return Some(());
             }
 
             // Check if it's a sync page method
-            if SYNC_PAGE_METHODS.contains(&method_name) {
+            if SYNC_PAGE_METHODS.binary_search(&method_name).is_ok() {
                 // Verify it's called on page/frame
                 let object = member_expr.object().ok()?;
                 if is_page_or_frame(&object) {
@@ -210,11 +216,7 @@ fn is_page_or_frame(expr: &AnyJsExpression) -> bool {
             if let Ok(name) = id.name()
                 && let Ok(token) = name.value_token()
             {
-                let text = token.text_trimmed();
-                return text == "page"
-                    || text == "frame"
-                    || text.ends_with("Page")
-                    || text.ends_with("Frame");
+                return is_page_or_frame_name(token.text_trimmed());
             }
             false
         }
@@ -223,11 +225,7 @@ fn is_page_or_frame(expr: &AnyJsExpression) -> bool {
                 && let Some(name) = member_name.as_js_name()
                 && let Ok(token) = name.value_token()
             {
-                let text = token.text_trimmed();
-                return text == "page"
-                    || text == "frame"
-                    || text.ends_with("Page")
-                    || text.ends_with("Frame");
+                return is_page_or_frame_name(token.text_trimmed());
             }
             false
         }
@@ -260,7 +258,10 @@ fn is_sync_expect_call(call_expr: &JsCallExpression) -> bool {
     };
     let matcher_name: TokenText = token.token_text_trimmed();
 
-    if !SYNC_EXPECT_MATCHERS.contains(&matcher_name.text()) {
+    if SYNC_EXPECT_MATCHERS
+        .binary_search(&matcher_name.text())
+        .is_err()
+    {
         return false;
     }
 
@@ -359,4 +360,24 @@ fn has_async_modifier(expect_call: &JsCallExpression, final_call: &JsCallExpress
     }
 
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn locator_methods_sorted() {
+        assert!(LOCATOR_METHODS.is_sorted());
+    }
+
+    #[test]
+    fn sync_page_methods_sorted() {
+        assert!(SYNC_PAGE_METHODS.is_sorted());
+    }
+
+    #[test]
+    fn sync_expect_matchers_sorted() {
+        assert!(SYNC_EXPECT_MATCHERS.is_sorted());
+    }
 }

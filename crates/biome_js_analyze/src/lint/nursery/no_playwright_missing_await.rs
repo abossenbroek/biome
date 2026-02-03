@@ -10,6 +10,8 @@ use biome_js_syntax::{
 };
 use biome_rowan::{AstNode, BatchMutationExt, TokenText, TriviaPieceKind};
 
+use biome_rule_options::no_playwright_missing_await::NoPlaywrightMissingAwaitOptions;
+
 use crate::{JsRuleAction, ast_utils::is_in_async_function};
 
 declare_lint_rule! {
@@ -67,6 +69,7 @@ declare_lint_rule! {
 }
 
 // Playwright async matchers (web-first assertions)
+// IMPORTANT: Keep this array sorted for binary search
 const ASYNC_PLAYWRIGHT_MATCHERS: &[&str] = &[
     "toBeAttached",
     "toBeChecked",
@@ -79,14 +82,15 @@ const ASYNC_PLAYWRIGHT_MATCHERS: &[&str] = &[
     "toBeInViewport",
     "toBeOK",
     "toBeVisible",
+    "toContainClass",
     "toContainText",
     "toHaveAccessibleDescription",
     "toHaveAccessibleErrorMessage",
     "toHaveAccessibleName",
     "toHaveAttribute",
+    "toHaveCSS",
     "toHaveClass",
     "toHaveCount",
-    "toHaveCSS",
     "toHaveId",
     "toHaveJSProperty",
     "toHaveScreenshot",
@@ -95,7 +99,6 @@ const ASYNC_PLAYWRIGHT_MATCHERS: &[&str] = &[
     "toHaveURL",
     "toHaveValue",
     "toHaveValues",
-    "toContainClass",
     "toPass",
 ];
 
@@ -109,7 +112,7 @@ impl Rule for NoPlaywrightMissingAwait {
     type Query = Ast<JsCallExpression>;
     type State = MissingAwaitType;
     type Signals = Option<Self::State>;
-    type Options = ();
+    type Options = NoPlaywrightMissingAwaitOptions;
 
     fn run(ctx: &RuleContext<Self>) -> Self::Signals {
         let call_expr = ctx.query();
@@ -285,7 +288,10 @@ fn get_async_expect_matcher(call_expr: &JsCallExpression) -> Option<MissingAwait
     }
 
     // Then check if it's an async Playwright matcher
-    if !ASYNC_PLAYWRIGHT_MATCHERS.contains(&matcher_name.text()) {
+    if ASYNC_PLAYWRIGHT_MATCHERS
+        .binary_search(&matcher_name.text())
+        .is_err()
+    {
         return None;
     }
 
@@ -498,4 +504,14 @@ fn is_in_async_context(node: &biome_js_syntax::JsSyntaxNode) -> bool {
     }
 
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn async_matchers_sorted() {
+        assert!(ASYNC_PLAYWRIGHT_MATCHERS.is_sorted());
+    }
 }

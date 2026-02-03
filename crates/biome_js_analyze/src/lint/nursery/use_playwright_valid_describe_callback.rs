@@ -4,6 +4,7 @@ use biome_analyze::{
 use biome_console::markup;
 use biome_js_syntax::{AnyJsExpression, JsCallExpression};
 use biome_rowan::{AstNode, AstSeparatedList};
+use biome_rule_options::use_playwright_valid_describe_callback::UsePlaywrightValidDescribeCallbackOptions;
 
 declare_lint_rule! {
     /// Enforce valid `describe()` callback.
@@ -63,7 +64,7 @@ impl Rule for UsePlaywrightValidDescribeCallback {
     type Query = Ast<JsCallExpression>;
     type State = InvalidReason;
     type Signals = Option<Self::State>;
-    type Options = ();
+    type Options = UsePlaywrightValidDescribeCallbackOptions;
 
     fn run(ctx: &RuleContext<Self>) -> Self::Signals {
         let call_expr = ctx.query();

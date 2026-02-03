@@ -4,6 +4,7 @@ use biome_analyze::{
 use biome_console::markup;
 use biome_js_syntax::{AnyJsExpression, JsCallExpression, JsObjectExpression};
 use biome_rowan::AstNode;
+use biome_rule_options::no_playwright_force_option::NoPlaywrightForceOptionOptions;
 
 declare_lint_rule! {
     /// Disallow usage of the `{ force: true }` option.
@@ -51,9 +52,9 @@ declare_lint_rule! {
     }
 }
 
+// IMPORTANT: Keep this array sorted for binary search
 const METHODS_WITH_FORCE: &[&str] = &[
     "check",
-    "uncheck",
     "click",
     "dblclick",
     "dragTo",
@@ -63,13 +64,14 @@ const METHODS_WITH_FORCE: &[&str] = &[
     "selectText",
     "setChecked",
     "tap",
+    "uncheck",
 ];
 
 impl Rule for NoPlaywrightForceOption {
     type Query = Ast<JsCallExpression>;
     type State = ();
     type Signals = Option<Self::State>;
-    type Options = ();
+    type Options = NoPlaywrightForceOptionOptions;
 
     fn run(ctx: &RuleContext<Self>) -> Self::Signals {
         let call_expr = ctx.query();
@@ -82,7 +84,7 @@ impl Rule for NoPlaywrightForceOption {
         let method_name = member_text.text_trimmed();
 
         // Check if it's one of the methods that support force option
-        if !METHODS_WITH_FORCE.contains(&method_name) {
+        if METHODS_WITH_FORCE.binary_search(&method_name).is_err() {
             return None;
         }
 
@@ -143,4 +145,14 @@ fn has_force_true(obj_expr: &JsObjectExpression) -> bool {
     }
 
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn methods_with_force_sorted() {
+        assert!(METHODS_WITH_FORCE.is_sorted());
+    }
 }

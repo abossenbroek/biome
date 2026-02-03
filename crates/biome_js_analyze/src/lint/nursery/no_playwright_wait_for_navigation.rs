@@ -4,6 +4,9 @@ use biome_analyze::{
 use biome_console::markup;
 use biome_js_syntax::{JsCallExpression, JsStaticMemberExpression};
 use biome_rowan::{AstNode, TokenText};
+use biome_rule_options::no_playwright_wait_for_navigation::NoPlaywrightWaitForNavigationOptions;
+
+use crate::frameworks::playwright::get_page_or_frame_name;
 
 declare_lint_rule! {
     /// Disallow using `page.waitForNavigation()`.
@@ -52,7 +55,7 @@ impl Rule for NoPlaywrightWaitForNavigation {
     type Query = Ast<JsCallExpression>;
     type State = TokenText;
     type Signals = Option<Self::State>;
-    type Options = ();
+    type Options = NoPlaywrightWaitForNavigationOptions;
 
     fn run(ctx: &RuleContext<Self>) -> Self::Signals {
         let call_expr = ctx.query();
@@ -68,29 +71,7 @@ impl Rule for NoPlaywrightWaitForNavigation {
         }
 
         let object = member_expr.object().ok()?;
-        let object_text = match object {
-            biome_js_syntax::AnyJsExpression::JsIdentifierExpression(id) => {
-                id.name().ok()?.value_token().ok()?.token_text_trimmed()
-            }
-            biome_js_syntax::AnyJsExpression::JsStaticMemberExpression(member) => member
-                .member()
-                .ok()?
-                .as_js_name()?
-                .value_token()
-                .ok()?
-                .token_text_trimmed(),
-            _ => return None,
-        };
-
-        if object_text == "page"
-            || object_text == "frame"
-            || object_text.ends_with("Page")
-            || object_text.ends_with("Frame")
-        {
-            Some(object_text)
-        } else {
-            None
-        }
+        get_page_or_frame_name(&object)
     }
 
     fn diagnostic(ctx: &RuleContext<Self>, state: &Self::State) -> Option<RuleDiagnostic> {
